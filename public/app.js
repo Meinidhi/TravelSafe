@@ -119,6 +119,11 @@ class App {
                     window.GroupController.render();
                 }
                 break;
+            case 'chat':
+                if (window.ChatController && window.ChatController.render) {
+                    window.ChatController.render();
+                }
+                break;
         }
     }
     

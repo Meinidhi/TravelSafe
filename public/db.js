@@ -2,6 +2,19 @@
  * Database client connecting to Firebase Firestore.
  * Retains offline queuing for resilience/compatibility with UI.
  */
+
+// Global XSS Sanitization Helper
+window.escapeHtml = function(string) {
+    if (string === null || string === undefined) return '';
+    return String(string)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
+};
+
 class DatabaseClient {
     constructor() {
         // Only keep offlineQueue in local storage for legacy UI support
@@ -146,16 +159,28 @@ class DatabaseClient {
                 throw new Error("Group not found");
             }
             
-            const groupData = doc.data();
-            if (!groupData.members.includes(userId)) {
-                groupData.members.push(userId);
-                await groupRef.update({ members: groupData.members });
-            }
+            await groupRef.update({
+                members: firebase.firestore.FieldValue.arrayUnion(userId)
+            });
             
-            return { id: doc.id, ...groupData };
+            const updatedDoc = await groupRef.get();
+            return { id: updatedDoc.id, ...updatedDoc.data() };
         } catch(e) {
             console.error("Error joining group:", e);
             throw new Error(e.message || "Failed to join group");
+        }
+    }
+
+    async leaveGroup(groupId, userId) {
+        try {
+            const groupRef = window.db.collection('groups').doc(groupId);
+            await groupRef.update({
+                members: firebase.firestore.FieldValue.arrayRemove(userId)
+            });
+            return true;
+        } catch(e) {
+            console.error("Error leaving group:", e);
+            throw new Error(e.message || "Failed to leave group");
         }
     }
 
@@ -185,6 +210,18 @@ class DatabaseClient {
             }, { merge: true });
         } catch(e) {
             console.error("Error updating location:", e);
+        }
+    }
+
+    async setSOSStatus(userId, isActive) {
+        if (!userId) return;
+        try {
+            await window.db.collection('users').doc(userId).set({
+                isSOSActive: isActive,
+                sosTimestamp: isActive ? new Date().toISOString() : null
+            }, { merge: true });
+        } catch(e) {
+            console.error("Error updating SOS status:", e);
         }
     }
 

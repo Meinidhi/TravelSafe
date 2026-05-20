@@ -12,6 +12,7 @@ class MapModule {
         this.servicesAdded = false;
         this.isMapInitialized = false;
         this.currentCoords = null; 
+        this.isSelfSOSActive = false;
 
         // Risk detection constants
         this.RISK_ZONES = [
@@ -92,6 +93,7 @@ class MapModule {
         if (window.Auth && window.Auth.getCurrentUser()) {
             const user = window.Auth.getCurrentUser();
             window.DB.updateLocation(user.id, lat, lng);
+            this.isSelfSOSActive = !!user.isSOSActive;
         }
 
         const statusEl = document.getElementById('map-status-indicator');
@@ -99,19 +101,14 @@ class MapModule {
 
         // Update Map Marker
         if (!this.userMarker) {
-            // Custom user icon
-            const userIcon = L.divIcon({
-                className: 'custom-user-marker',
-                html: '<div style="background-color: var(--accent-color); width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(100,255,218,0.8);"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            });
+            const userIcon = this.createUserIcon(this.isSelfSOSActive);
             this.userMarker = L.marker([lat, lng], { icon: userIcon }).addTo(this.map)
                 .bindPopup("<b>You are here</b>").openPopup();
                 
             this.map.setView([lat, lng], 16);
         } else {
             this.userMarker.setLatLng([lat, lng]);
+            this.userMarker.setIcon(this.createUserIcon(this.isSelfSOSActive));
         }
 
         this.checkRiskZones(lat, lng);
@@ -175,7 +172,9 @@ class MapModule {
         }
 
         if (window.DashboardController) {
-            if (inDanger) {
+            if (this.isSelfSOSActive) {
+                window.DashboardController.setSafetyStatus('DANGER', 'EMERGENCY SOS ACTIVE');
+            } else if (inDanger) {
                 window.DashboardController.setSafetyStatus('DANGER', riskMessage);
             } else {
                 window.DashboardController.setSafetyStatus('SAFE');
@@ -214,6 +213,32 @@ class MapModule {
         return this.currentCoords;
     }
 
+    createUserIcon(isActive) {
+        if (isActive) {
+            return L.divIcon({
+                className: 'custom-user-marker-sos',
+                html: '<div style="background-color: var(--danger-color); width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center; color: white; font-size: 12px; font-weight: bold; box-shadow: 0 0 15px var(--danger-color); animation: pulse 1.5s infinite;"><i class="fas fa-exclamation-triangle"></i></div>',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+        } else {
+            return L.divIcon({
+                className: 'custom-user-marker',
+                html: '<div style="background-color: var(--accent-color); width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(100,255,218,0.8);"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+        }
+    }
+
+    setSelfSOS(isActive) {
+        this.isSelfSOSActive = isActive;
+        if (this.userMarker && this.currentCoords) {
+            const userIcon = this.createUserIcon(isActive);
+            this.userMarker.setIcon(userIcon);
+        }
+    }
+
     updateGroupMarkers(membersData) {
         if (!this.map) return;
         
@@ -228,19 +253,27 @@ class MapModule {
                 const lng = member.location.lng;
                 const name = member.name || "Member";
                 
-                // If marker exists, move it. Else create it.
+                const bgColor = member.isSOSActive ? 'var(--danger-color)' : '#9b59b6';
+                const shadow = member.isSOSActive ? '0 0 15px var(--danger-color)' : 'var(--card-shadow)';
+                const animation = member.isSOSActive ? 'animation: pulse 1.5s infinite;' : '';
+                const innerHtml = member.isSOSActive 
+                    ? '<i class="fas fa-exclamation-triangle" style="font-size: 11px;"></i>' 
+                    : name[0].toUpperCase();
+                
+                const customIcon = L.divIcon({
+                    className: 'custom-group-marker',
+                    html: `<div style="background-color: ${bgColor}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center; color: white; font-size: 12px; font-weight: bold; box-shadow: ${shadow}; ${animation}">${innerHtml}</div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+
+                // If marker exists, move it and update icon. Else create it.
                 if (this.groupMarkers[member.id]) {
                     this.groupMarkers[member.id].setLatLng([lat, lng]);
+                    this.groupMarkers[member.id].setIcon(customIcon);
                 } else {
-                    const customIcon = L.divIcon({
-                        className: 'custom-group-marker',
-                        html: `<div style="background-color: #9b59b6; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; display: flex; justify-content: center; align-items: center; color: white; font-size: 12px; font-weight: bold; box-shadow: var(--card-shadow);">${name[0]}</div>`,
-                        iconSize: [28, 28],
-                        iconAnchor: [14, 14]
-                    });
-
                     const marker = L.marker([lat, lng], { icon: customIcon }).addTo(this.map)
-                        .bindPopup(`<b>${name}</b><br>Group Member`);
+                        .bindPopup(`<b>${name}</b><br>Group Member${member.isSOSActive ? ' - <span style="color:red;">SOS ACTIVE</span>' : ''}`);
                         
                     this.groupMarkers[member.id] = marker;
                 }

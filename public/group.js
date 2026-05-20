@@ -6,6 +6,7 @@ class GroupModule {
         this.viewElement = document.getElementById('view-group');
         this.activeGroup = null;
         this.groupMarkers = {};
+        this.knownSOSStates = {};
     }
 
     async render() {
@@ -102,11 +103,27 @@ class GroupModule {
             
             membersData.forEach(m => {
                 const isMe = m.id === user.id;
-                const name = isMe ? "You" : (m.name || `User ${m.id.substring(0,4)}`);
+                const displayName = isMe ? "You" : (m.name || `User ${m.id.substring(0,4)}`);
+                const escapedName = window.escapeHtml(displayName);
                 
+                // Check SOS state
+                if (m.isSOSActive) {
+                    if (!this.knownSOSStates[m.id] && !isMe) {
+                        window.app.showTopBanner(`${displayName} triggered an SOS!`, 'danger', 15000);
+                    }
+                    this.knownSOSStates[m.id] = true;
+                } else {
+                    if (this.knownSOSStates[m.id]) {
+                        if (!isMe) window.app.showTopBanner(`${displayName} is safe now.`, 'safe', 5000);
+                    }
+                    this.knownSOSStates[m.id] = false;
+                }
+
                 // Determine online/active status based on last location update
                 let statusHtml = '<span style="color: var(--text-secondary); font-size: 0.8rem;">Unknown</span>';
-                if (m.location && m.location.timestamp) {
+                if (m.isSOSActive) {
+                    statusHtml = '<div style="color: var(--danger-color); font-size: 0.8rem; font-weight: bold; animation: pulse 1.5s infinite;"><i class="fas fa-exclamation-triangle"></i> SOS ACTIVE</div>';
+                } else if (m.location && m.location.timestamp) {
                     const diffMins = (new Date() - new Date(m.location.timestamp)) / 60000;
                     if (diffMins < 5) {
                         statusHtml = '<div style="color: var(--safe-color); font-size: 0.8rem;"><i class="fas fa-signal"></i> Active</div>';
@@ -119,19 +136,22 @@ class GroupModule {
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--bg-tertiary);">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div style="background: var(--accent-color); color: var(--bg-primary); width: 32px; height: 32px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold;">
-                                ${name[0].toUpperCase()}
+                                ${escapedName[0].toUpperCase()}
                             </div>
-                            <span style="${isMe ? 'font-weight:bold' : ''}">${name}</span>
+                            <span style="${isMe ? 'font-weight:bold' : ''}">${escapedName}</span>
                         </div>
                         ${statusHtml}
                     </div>
                 `;
             });
 
+            const escapedGroupName = window.escapeHtml(this.activeGroup.name);
+            const escapedGroupId = window.escapeHtml(this.activeGroup.id);
+
             this.viewElement.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 style="margin: 0;">${this.activeGroup.name}</h2>
-                    <span style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-family: monospace;">CODE: ${this.activeGroup.id}</span>
+                    <h2 style="margin: 0;">${escapedGroupName}</h2>
+                    <span style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-family: monospace;">CODE: ${escapedGroupId}</span>
                 </div>
                 
                 <div class="card">
@@ -154,12 +174,34 @@ class GroupModule {
                 window.app.navigate('map');
             });
 
-            document.getElementById('btn-leave-group').addEventListener('click', () => {
-                if (this.unsubscribeMembers) this.unsubscribeMembers();
-                this.activeGroup = null;
-                // Also clean up map markers
-                if (window.MapController) window.MapController.updateGroupMarkers([]);
-                this.renderNoGroup();
+            document.getElementById('btn-leave-group').addEventListener('click', async () => {
+                const btn = document.getElementById('btn-leave-group');
+                btn.disabled = true;
+                btn.textContent = 'Leaving...';
+                
+                try {
+                    const user = window.Auth.getCurrentUser();
+                    if (user && this.activeGroup) {
+                        await window.DB.leaveGroup(this.activeGroup.id, user.id);
+                    }
+                    
+                    if (this.unsubscribeMembers) this.unsubscribeMembers();
+                    this.activeGroup = null;
+                    // Also clean up map markers
+                    if (window.MapController) window.MapController.updateGroupMarkers([]);
+                    this.renderNoGroup();
+                    
+                    if (window.app) {
+                        window.app.showTopBanner('Successfully left the group', 'safe', 3000);
+                    }
+                } catch(e) {
+                    console.error("Failed to leave group:", e);
+                    if (window.app) {
+                        window.app.showTopBanner(e.message || 'Failed to leave group. Check connection.', 'danger');
+                    }
+                    btn.disabled = false;
+                    btn.textContent = 'Leave Group';
+                }
             });
 
             // Push member data to the map controller to update live locations
