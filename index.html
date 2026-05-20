@@ -1,32 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Smart Tourist Safety</title>
-
+    
     <!-- Meta tags for SEO & theme -->
     <meta name="theme-color" content="#0A192F">
     <meta name="description" content="Production-quality mobile-first Smart Tourist Safety Monitoring System.">
-
+    
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+    
     <!-- App CSS -->
     <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
     <!-- Offline Banner -->
     <div id="offline-banner" class="hidden">
         <i class="fas fa-wifi-slash"></i> Offline Mode - Data will sync when reconnected
     </div>
-
+    
     <!-- Top Banner (for Risk warning etc.) -->
     <div id="top-banner" class="top-banner hidden"></div>
 
@@ -36,12 +34,12 @@
         <main id="view-auth" class="view active">
             <!-- Auth content injected via JS -->
         </main>
-
+        
         <!-- Dashboard View -->
         <main id="view-dashboard" class="view hidden">
             <!-- Dashboard content injected via JS -->
         </main>
-
+        
         <!-- Map View -->
         <main id="view-map" class="view hidden">
             <div id="map-container" class="map-container"></div>
@@ -51,17 +49,17 @@
                 <div class="map-status" id="map-status-indicator">Loading GPS...</div>
             </div>
         </main>
-
+        
         <!-- Group View -->
         <main id="view-group" class="view hidden">
-            <!-- Group content -->
+             <!-- Group content -->
         </main>
 
         <!-- SOS View -->
         <main id="view-sos" class="view hidden">
             <!-- SOS content -->
         </main>
-
+        
         <!-- Chat View -->
         <main id="view-chat" class="view hidden">
             <!-- Chat content -->
@@ -93,16 +91,19 @@
             <i class="fas fa-users"></i>
             <span>Group</span>
         </a>
+        <a href="#" class="nav-item" data-target="chat">
+            <i class="fas fa-comments"></i>
+            <span>Assistant</span>
+        </a>
         <a href="#" class="nav-item" data-target="profile">
             <i class="fas fa-user"></i>
             <span>Profile</span>
         </a>
     </nav>
-
+    
     <!-- Floating Admin Button -->
-    <button id="dev-admin-btn" class="dev-admin-btn hidden" title="Admin Panel"><i
-            class="fas fa-user-shield"></i></button>
-
+    <button id="dev-admin-btn" class="dev-admin-btn hidden" title="Admin Panel"><i class="fas fa-user-shield"></i></button>
+    
     <!-- Admin View Modal -->
     <div id="admin-modal" class="modal hidden">
         <div class="modal-content">
@@ -114,6 +115,14 @@
 
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+    
+    <!-- Initialize Firebase -->
+    <script src="firebase.js"></script>
+
     <script src="db.js"></script>
     <script src="auth.js"></script>
     <script src="dashboard.js"></script>
@@ -125,5 +134,4 @@
     <script src="admin.js"></script>
     <script src="app.js"></script>
 </body>
-
 </html>

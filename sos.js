@@ -17,6 +17,13 @@ class SOSModule {
     }
 
     render() {
+        const user = window.Auth.getCurrentUser();
+        if (user && user.isSOSActive) {
+            const loc = window.MapController ? window.MapController.getCurrentLocation() : null;
+            this.renderActiveSOS(user, loc);
+            return;
+        }
+
         this.viewElement.innerHTML = `
             <div class="card text-center" style="margin-top: 20px;">
                 <h2 class="text-danger">EMERGENCY SOS</h2>
@@ -71,7 +78,40 @@ class SOSModule {
         });
     }
 
-    executeSOS() {
+    renderActiveSOS(user, loc) {
+        const latText = loc ? `Lat: ${loc.latitude.toFixed(5)}` : 'Location acquired';
+        const lngText = loc ? `Lng: ${loc.longitude.toFixed(5)}` : 'Broadcasting live coordinates...';
+
+        this.viewElement.innerHTML = `
+            <div class="card text-center" style="margin-top: 20px; border: 2px solid var(--danger-color); box-shadow: var(--neon-shadow-danger);">
+                <h2 class="text-danger"><i class="fas fa-broadcast-tower"></i> SOS ACTIVE</h2>
+                <p>Alert broadcasted. Stay calm, help is on the way.</p>
+                <div style="margin: 20px 0; padding: 15px; background: rgba(255,0,0,0.1); border-radius: 8px;">
+                    <p style="font-size: 0.9rem; margin:0;" class="text-danger">${latText}</p>
+                    <p style="font-size: 0.9rem; margin:0;" class="text-danger">${lngText}</p>
+                </div>
+                <button class="btn btn-secondary" onclick="window.app.navigate('dashboard')" style="margin-top: 20px;">Return to Dashboard</button>
+                <button id="btn-cancel-active-sos" class="btn" style="background: transparent; color: var(--text-secondary); margin-top: 10px; font-size: 0.8rem;">Cancel SOS Operation</button>
+            </div>
+        `;
+
+        document.getElementById('btn-cancel-active-sos').addEventListener('click', async () => {
+            if (user) {
+                user.isSOSActive = false;
+                await window.DB.setSOSStatus(user.id, false);
+            }
+            if (window.MapController) {
+                window.MapController.setSelfSOS(false);
+            }
+            window.app.showTopBanner('SOS Operation Cancelled', 'safe', 5000);
+            this.render(); // Restore default view
+            if (window.DashboardController) {
+                window.DashboardController.setSafetyStatus('SAFE');
+            }
+        });
+    }
+
+    async executeSOS() {
         document.getElementById('sos-confirm-overlay').classList.add('hidden');
         
         const loc = window.MapController ? window.MapController.getCurrentLocation() : null;
@@ -94,27 +134,26 @@ class SOSModule {
         };
 
         try {
-            const [savedIncident, queued] = window.DB.saveIncident(incidentData, isOffline);
+            const [savedIncident, queued] = await window.DB.saveIncident(incidentData, isOffline);
             
             if (queued) {
                 window.app.showTopBanner('Offline: SOS saved. Will broadcast upon connection!', 'warning', 10000);
             } else {
                 window.app.showTopBanner('SOS Sent Successfully to emergency contacts & group!', 'danger', 10000);
             }
+
+            // Broadcast SOS status to group members via Firebase
+            if (user) {
+                user.isSOSActive = true;
+                await window.DB.setSOSStatus(user.id, true);
+            }
+            
+            if (window.MapController) {
+                window.MapController.setSelfSOS(true);
+            }
             
             // Re-render to show active state
-            this.viewElement.innerHTML = `
-                <div class="card text-center" style="margin-top: 20px; border: 2px solid var(--danger-color); box-shadow: var(--neon-shadow-danger);">
-                    <h2 class="text-danger"><i class="fas fa-broadcast-tower"></i> SOS ACTIVE</h2>
-                    <p>Alert broadcasted. Stay calm, help is on the way.</p>
-                    <div style="margin: 20px 0; padding: 15px; background: rgba(255,0,0,0.1); border-radius: 8px;">
-                        <p style="font-size: 0.9rem; margin:0;" class="text-danger">Lat: ${loc.latitude.toFixed(5)}</p>
-                        <p style="font-size: 0.9rem; margin:0;" class="text-danger">Lng: ${loc.longitude.toFixed(5)}</p>
-                    </div>
-                    <button class="btn btn-secondary" onclick="window.app.navigate('dashboard')" style="margin-top: 20px;">Return to Dashboard</button>
-                    <button class="btn" style="background: transparent; color: var(--text-secondary); margin-top: 10px; font-size: 0.8rem;">Cancel SOS Operation</button>
-                </div>
-            `;
+            this.renderActiveSOS(user, loc);
             
             if (window.GroupController) {
                 window.GroupController.notifySOSActive();
@@ -125,6 +164,7 @@ class SOSModule {
             }
 
         } catch (e) {
+            console.error(e);
             window.app.showTopBanner('System Error Dispatching SOS.', 'danger');
         }
     }

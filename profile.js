@@ -10,6 +10,12 @@ class ProfileModule {
         const user = window.Auth.getCurrentUser();
         if (!user) return;
 
+        const escapedName = window.escapeHtml(user.name);
+        const escapedEmail = window.escapeHtml(user.email);
+        const escapedPhone = window.escapeHtml(user.phone);
+        const escapedNationality = window.escapeHtml(user.nationality || 'Not Set');
+        const escapedEmergencyPhone = window.escapeHtml(user.emergencyPhone || 'Not Set');
+
         this.viewElement.innerHTML = `
             <h2>Profile Settings</h2>
             
@@ -17,23 +23,23 @@ class ProfileModule {
                 <form id="profile-form">
                     <div class="form-group">
                         <label>Full Name</label>
-                        <input type="text" id="prof-name" value="${user.name}" required>
+                        <input type="text" id="prof-name" value="${escapedName}" required>
                     </div>
                     <div class="form-group">
                         <label>Email (Read Only)</label>
-                        <input type="email" value="${user.email}" disabled style="opacity: 0.5;">
+                        <input type="email" value="${escapedEmail}" disabled style="opacity: 0.5;">
                     </div>
                     <div class="form-group">
                         <label>Phone Number</label>
-                        <input type="tel" id="prof-phone" value="${user.phone}" required>
+                        <input type="tel" id="prof-phone" value="${escapedPhone}" required>
                     </div>
                     <div class="form-group">
                         <label>Nationality</label>
-                        <input type="text" id="prof-nationality" value="${user.nationality || 'Not Set'}" required>
+                        <input type="text" id="prof-nationality" value="${escapedNationality}" required>
                     </div>
                     <div class="form-group">
                         <label>Emergency Contact</label>
-                        <input type="tel" id="prof-emergency" value="${user.emergencyPhone || 'Not Set'}" required>
+                        <input type="tel" id="prof-emergency" value="${escapedEmergencyPhone}" required>
                     </div>
                     
                     <button type="submit" class="btn btn-primary" style="margin-bottom: 20px;">Save Changes</button>
@@ -62,11 +68,15 @@ class ProfileModule {
         });
     }
 
-    saveProfile() {
+    async saveProfile() {
         const user = window.Auth.getCurrentUser();
         const msg = document.getElementById('prof-msg');
+        const submitBtn = this.viewElement.querySelector('button[type="submit"]');
         
         try {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            
             const updates = {
                 name: document.getElementById('prof-name').value.trim(),
                 phone: document.getElementById('prof-phone').value.trim(),
@@ -74,7 +84,7 @@ class ProfileModule {
                 emergencyPhone: document.getElementById('prof-emergency').value.trim()
             };
 
-            window.DB.updateUser(user.id, updates);
+            await window.DB.updateUser(user.id, updates);
             
             msg.textContent = "Profile Updated Successfully!";
             msg.style.color = "var(--safe-color)";
@@ -85,9 +95,12 @@ class ProfileModule {
             
             setTimeout(() => msg.classList.add('hidden'), 3000);
         } catch(e) {
-            msg.textContent = "Error updating profile.";
+            msg.textContent = e.message || "Error updating profile.";
             msg.style.color = "var(--danger-color)";
             msg.classList.remove('hidden');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Changes';
         }
     }
 }

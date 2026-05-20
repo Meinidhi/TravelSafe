@@ -17,9 +17,12 @@ class App {
         this.init();
     }
 
-    init() {
+    async init() {
         this.setupNavigation();
         this.setupNetworkHandling();
+        if (window.Auth && window.Auth.init) {
+            await window.Auth.init();
+        }
         this.checkAuthStatus();
         console.log("App Initialized");
     }
@@ -65,6 +68,7 @@ class App {
         } else {
             this.elements.nav.classList.add('hidden');
             this.navigate('auth');
+            if (window.Auth) window.Auth.render();
         }
     }
 
@@ -113,6 +117,11 @@ class App {
             case 'group':
                 if (window.GroupController && window.GroupController.render) {
                     window.GroupController.render();
+                }
+                break;
+            case 'chat':
+                if (window.ChatController && window.ChatController.render) {
+                    window.ChatController.render();
                 }
                 break;
         }

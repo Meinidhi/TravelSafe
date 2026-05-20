@@ -11,9 +11,15 @@ class AdminModule {
         if (this.btn) {
             this.btn.classList.remove('hidden');
             
-            this.btn.addEventListener('click', () => {
-                this.render();
+            this.btn.addEventListener('click', async () => {
                 this.modal.classList.remove('hidden');
+                this.content.innerHTML = `
+                    <div style="text-align: center; padding: 30px;">
+                        <div class="spinner"></div>
+                        <p style="margin-top: 15px; color: var(--text-secondary);">Loading system data...</p>
+                    </div>
+                `;
+                await this.render();
             });
             
             this.closeBtn.addEventListener('click', () => {
@@ -22,29 +28,62 @@ class AdminModule {
         }
     }
 
-    render() {
-        const users = window.DB.getTable('users');
-        const incidents = window.DB.getTable('incidents');
+    async render() {
+        let users = [];
+        let incidents = [];
+        
+        try {
+            const usersSnapshot = await window.db.collection('users').get();
+            usersSnapshot.forEach(doc => {
+                users.push({ id: doc.id, ...doc.data() });
+            });
+        } catch (e) {
+            console.error("Error loading users:", e);
+        }
+        
+        try {
+            const incidentsSnapshot = await window.db.collection('incidents').get();
+            incidentsSnapshot.forEach(doc => {
+                incidents.push({ id: doc.id, ...doc.data() });
+            });
+        } catch (e) {
+            console.error("Error loading incidents:", e);
+        }
         
         let usersHtml = '<table style="width:100%; text-align:left; border-collapse: collapse; font-size: 0.9rem;"><tr><th style="padding-bottom:5px">Name</th><th style="padding-bottom:5px">Status</th></tr>';
-        users.forEach(u => {
-            usersHtml += `<tr>
-                <td style="padding: 8px 0; border-bottom: 1px solid var(--bg-tertiary);">${u.name}</td>
-                <td style="padding: 8px 0; border-bottom: 1px solid var(--bg-tertiary);" class="text-safe">Monitored</td>
-            </tr>`;
-        });
+        if (users.length === 0) {
+            usersHtml += '<tr><td colspan="2" style="padding: 10px 0; color: var(--text-secondary); text-align: center;">No users registered yet.</td></tr>';
+        } else {
+            users.forEach(u => {
+                const name = u.name || `User (${u.id ? u.id.substring(0, 6) : 'Unknown'})`;
+                const escapedName = window.escapeHtml(name);
+                const sosStatus = u.isSOSActive ? '<span class="text-danger" style="font-weight: bold; animation: pulse 1.5s infinite;"><i class="fas fa-exclamation-triangle"></i> SOS</span>' : '<span class="text-safe">Monitored</span>';
+                usersHtml += `<tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid var(--bg-tertiary);">${escapedName}</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid var(--bg-tertiary);">${sosStatus}</td>
+                </tr>`;
+            });
+        }
         usersHtml += '</table>';
 
         let incidentsHtml = '';
         if (incidents.length === 0) {
             incidentsHtml = '<p class="text-secondary" style="font-size: 0.9rem;">No emergencies reported.</p>';
         } else {
-            incidents.reverse().forEach(i => {
+            // Sort by timestamp desc to make sure latest is first
+            const sortedIncidents = incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            sortedIncidents.forEach(i => {
+                const userName = i.name || 'Unknown User';
+                const escapedUserName = window.escapeHtml(userName);
+                const timestampText = i.timestamp ? new Date(i.timestamp).toLocaleString() : 'Unknown Time';
+                const latText = i.location && typeof i.location.latitude === 'number' ? i.location.latitude.toFixed(4) : (typeof i.lat === 'number' ? i.lat.toFixed(4) : 'Unknown');
+                const lngText = i.location && typeof i.location.longitude === 'number' ? i.location.longitude.toFixed(4) : (typeof i.lng === 'number' ? i.lng.toFixed(4) : 'Unknown');
+                
                 incidentsHtml += `
                     <div style="background: rgba(255,76,76,0.1); border-left: 4px solid var(--danger-color); padding: 10px; margin-bottom: 10px; font-size: 0.85rem;">
-                        <strong class="text-danger">SOS ALERT</strong> - ${new Date(i.timestamp).toLocaleString()}<br>
-                        User: ${i.name}<br>
-                        Loc: ${i.location.latitude.toFixed(4)}, ${i.location.longitude.toFixed(4)}
+                        <strong class="text-danger">SOS ALERT</strong> - ${timestampText}<br>
+                        User: ${escapedUserName}<br>
+                        Loc: ${latText}, ${lngText}
                     </div>
                 `;
             });

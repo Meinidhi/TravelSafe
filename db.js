@@ -1,111 +1,104 @@
 /**
- * Mock Database module utilizing localStorage to simulate backend operations
+ * Database client connecting to Firebase Firestore.
+ * Retains offline queuing for resilience/compatibility with UI.
  */
-class DatabaseMock {
+
+// Global XSS Sanitization Helper
+window.escapeHtml = function(string) {
+    if (string === null || string === undefined) return '';
+    return String(string)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
+};
+
+class DatabaseClient {
     constructor() {
-        this.tables = {
-            users: 'db_users',
-            incidents: 'db_incidents',
-            groups: 'db_groups',
-            offlineQueue: 'db_offline_queue'
-        };
-        this.init();
-    }
-
-    init() {
-        for (const [key, value] of Object.entries(this.tables)) {
-            if (!localStorage.getItem(value)) {
-                localStorage.setItem(value, JSON.stringify([]));
-            }
+        // Only keep offlineQueue in local storage for legacy UI support
+        if (!localStorage.getItem('db_offline_queue')) {
+            localStorage.setItem('db_offline_queue', JSON.stringify([]));
         }
     }
 
-    getTable(tableName) {
-        return JSON.parse(localStorage.getItem(this.tables[tableName]) || '[]');
+    getOfflineQueue() {
+        return JSON.parse(localStorage.getItem('db_offline_queue') || '[]');
     }
 
-    saveTable(tableName, data) {
-        localStorage.setItem(this.tables[tableName], JSON.stringify(data));
+    saveOfflineQueue(queue) {
+        localStorage.setItem('db_offline_queue', JSON.stringify(queue));
     }
 
-    // --- Users ---
-    createUser(userData) {
-        const users = this.getTable('users');
-        if (users.find(u => u.email === userData.email)) {
-            throw new Error("Email already registered");
-        }
-        userData.id = 'usr_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
-        userData.createdAt = new Date().toISOString();
-        users.push(userData);
-        this.saveTable('users', users);
-        return userData;
-    }
-
-    findUserByEmail(email) {
-        return this.getTable('users').find(u => u.email === email);
-    }
-    
-    findUserById(id) {
-        return this.getTable('users').find(u => u.id === id);
-    }
-
-    updateUser(id, updates) {
-        const users = this.getTable('users');
-        const idx = users.findIndex(u => u.id === id);
-        if (idx !== -1) {
-            users[idx] = { ...users[idx], ...updates };
-            this.saveTable('users', users);
-            return users[idx];
-        }
-        throw new Error("User not found");
-    }
-
-    // --- Offline Queuing System ---
     queueOperation(operation, data) {
-        const queue = this.getTable('offlineQueue');
+        const queue = this.getOfflineQueue();
         queue.push({
             id: Date.now(),
             operation,
             data,
             timestamp: new Date().toISOString()
         });
-        this.saveTable('offlineQueue', queue);
+        this.saveOfflineQueue(queue);
     }
 
-    syncOfflineData() {
-        const queue = this.getTable('offlineQueue');
+    async syncOfflineData() {
+        const queue = this.getOfflineQueue();
         if (queue.length === 0) return;
         
-        console.log(`Syncing ${queue.length} offline operations...`);
-        // Process sequentially
+        console.log(`Syncing ${queue.length} offline operations to Firestore...`);
+        const remainingQueue = [];
+        
         for (let task of queue) {
             try {
-                if (task.operation === 'saveLocation') {
-                    // Ignore, simulate location sent to backend
-                } else if (task.operation === 'saveIncident') {
-                    this.saveIncidentLive(task.data);
+                if (task.operation === 'saveIncident') {
+                    await window.db.collection('incidents').doc(task.data.id).set(task.data);
                 }
             } catch(e) {
                 console.error("Failed to sync task", task, e);
+                remainingQueue.push(task);
             }
         }
         
-        // Clear queue
-        this.saveTable('offlineQueue', []);
+        this.saveOfflineQueue(remainingQueue);
         
-        if (window.app && window.app.showTopBanner) {
-            window.app.showTopBanner('Data synchronized with server', 'safe', 3000);
+        if (queue.length > remainingQueue.length && window.app && window.app.showTopBanner) {
+            window.app.showTopBanner('Data synchronized with Firebase', 'safe', 3000);
         }
     }
 
-    saveIncidentLive(incidentData) {
-        const incidents = this.getTable('incidents');
-        incidents.push(incidentData);
-        this.saveTable('incidents', incidents);
+    // --- Users ---
+    async createUserProfile(userData) {
+        // Create user profile in 'users' collection
+        await window.db.collection('users').doc(userData.id).set(userData);
+        return userData;
+    }
+
+    async updateUser(id, updates) {
+        try {
+            await window.db.collection('users').doc(id).set(updates, { merge: true });
+            return true;
+        } catch(e) {
+            console.error("Error updating user:", e);
+            throw e;
+        }
+    }
+
+    async findUserById(id) {
+        try {
+            const doc = await window.db.collection('users').doc(id).get();
+            if (doc.exists) {
+                return { id: doc.id, ...doc.data() };
+            }
+            return null;
+        } catch(e) {
+            console.error("Error finding user:", e);
+            return null;
+        }
     }
 
     // --- Incidents / SOS ---
-    saveIncident(incidentData, isOffline) {
+    async saveIncident(incidentData, isOffline) {
         incidentData.id = 'inc_' + Date.now().toString();
         incidentData.timestamp = new Date().toISOString();
         
@@ -113,46 +106,150 @@ class DatabaseMock {
             this.queueOperation('saveIncident', incidentData);
             return [incidentData, true]; // delayed
         } else {
-            this.saveIncidentLive(incidentData);
-            return [incidentData, false]; // immediate
+            try {
+                await window.db.collection('incidents').doc(incidentData.id).set(incidentData);
+                return [incidentData, false]; // immediate
+            } catch(e) {
+                // If it fails due to network mid-save, queue it
+                this.queueOperation('saveIncident', incidentData);
+                return [incidentData, true];
+            }
         }
     }
     
-    getIncidents() {
-        return this.getTable('incidents');
+    async getIncidents() {
+        try {
+            const snapshot = await window.db.collection('incidents').get();
+            const incidents = [];
+            snapshot.forEach(doc => {
+                incidents.push(doc.data());
+            });
+            // Sort by timestamp descending
+            return incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        } catch(e) {
+            console.error("Error getting incidents:", e);
+            return [];
+        }
     }
 
     // --- Groups ---
-    createGroup(name, creatorId) {
-        const groups = this.getTable('groups');
-        const groupId = Math.random().toString(36).substring(2, 8).toUpperCase(); 
-        const group = {
-            id: groupId,
-            name: name,
-            members: [{ userId: creatorId, joinedAt: new Date().toISOString() }],
-            createdAt: new Date().toISOString()
-        };
-        groups.push(group);
-        this.saveTable('groups', groups);
-        return group;
-    }
-
-    joinGroup(groupId, userId) {
-        const groups = this.getTable('groups');
-        const group = groups.find(g => g.id === groupId);
-        if (!group) throw new Error("Group not found");
-        
-        if (!group.members.find(m => m.userId === userId)) {
-            group.members.push({ userId, joinedAt: new Date().toISOString() });
-            this.saveTable('groups', groups);
+    async createGroup(name, creatorId) {
+        try {
+            const groupData = {
+                name,
+                creatorId,
+                members: [creatorId], // Creator is automatically a member
+                createdAt: new Date().toISOString()
+            };
+            
+            const docRef = await window.db.collection('groups').add(groupData);
+            return { id: docRef.id, ...groupData };
+        } catch(e) {
+            console.error("Error creating group:", e);
+            throw new Error("Failed to create group");
         }
-        return group;
     }
 
-    getUserGroups(userId) {
-        return this.getTable('groups').filter(g => g.members.some(m => m.userId === userId));
+    async joinGroup(groupId, userId) {
+        try {
+            const groupRef = window.db.collection('groups').doc(groupId);
+            const doc = await groupRef.get();
+            
+            if (!doc.exists) {
+                throw new Error("Group not found");
+            }
+            
+            await groupRef.update({
+                members: firebase.firestore.FieldValue.arrayUnion(userId)
+            });
+            
+            const updatedDoc = await groupRef.get();
+            return { id: updatedDoc.id, ...updatedDoc.data() };
+        } catch(e) {
+            console.error("Error joining group:", e);
+            throw new Error(e.message || "Failed to join group");
+        }
+    }
+
+    async leaveGroup(groupId, userId) {
+        try {
+            const groupRef = window.db.collection('groups').doc(groupId);
+            await groupRef.update({
+                members: firebase.firestore.FieldValue.arrayRemove(userId)
+            });
+            return true;
+        } catch(e) {
+            console.error("Error leaving group:", e);
+            throw new Error(e.message || "Failed to leave group");
+        }
+    }
+
+    async getUserGroups(userId) {
+        try {
+            const snapshot = await window.db.collection('groups')
+                .where('members', 'array-contains', userId)
+                .get();
+                
+            const groups = [];
+            snapshot.forEach(doc => {
+                groups.push({ id: doc.id, ...doc.data() });
+            });
+            return groups;
+        } catch(e) {
+            console.error("Error getting user groups:", e);
+            return [];
+        }
+    }
+
+    // --- Real-time Location ---
+    async updateLocation(userId, lat, lng) {
+        if (!userId) return;
+        try {
+            await window.db.collection('users').doc(userId).set({
+                location: { lat, lng, timestamp: new Date().toISOString() }
+            }, { merge: true });
+        } catch(e) {
+            console.error("Error updating location:", e);
+        }
+    }
+
+    async setSOSStatus(userId, isActive) {
+        if (!userId) return;
+        try {
+            await window.db.collection('users').doc(userId).set({
+                isSOSActive: isActive,
+                sosTimestamp: isActive ? new Date().toISOString() : null
+            }, { merge: true });
+        } catch(e) {
+            console.error("Error updating SOS status:", e);
+        }
+    }
+
+    listenToGroupMembers(memberIds, callback) {
+        if (!memberIds || memberIds.length === 0) return () => {};
+        
+        // Firestore 'in' query supports up to 30 elements
+        const chunks = [];
+        for (let i = 0; i < memberIds.length; i += 30) {
+            chunks.push(memberIds.slice(i, i + 30));
+        }
+        
+        // We only listen to the first chunk for simplicity in this demo (up to 30 members)
+        const targetIds = chunks[0];
+        
+        return window.db.collection('users')
+            .where(firebase.firestore.FieldPath.documentId(), 'in', targetIds)
+            .onSnapshot((snapshot) => {
+                const membersData = [];
+                snapshot.forEach(doc => {
+                    membersData.push({ id: doc.id, ...doc.data() });
+                });
+                callback(membersData);
+            }, error => {
+                console.error("Error listening to group members:", error);
+            });
     }
 }
 
 // Global DB instance
-window.DB = new DatabaseMock();
+window.DB = new DatabaseClient();
