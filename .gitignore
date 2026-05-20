@@ -1,0 +1,6 @@
+database.sqlite
+firebase.exe
+__pycache__/
+*.pyc
+node_modules/
+.firebase/
