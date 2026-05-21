@@ -20,7 +20,7 @@ class Dashboard {
             : 'Fetching...';
 
         this.viewElement.innerHTML = `
-            <h2>Welcome, <span class="text-accent">${window.escapeHtml(user.name.split(' ')[0])}</span>!</h2>
+            <h2>Welcome, <span class="text-accent">${window.escapeHtml((user.name || 'User').split(' ')[0])}</span>!</h2>
             <p>Your current safety status is monitored.</p>
             
             <div class="card" style="border-top: 4px solid ${statusColor}">

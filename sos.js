@@ -114,13 +114,62 @@ class SOSModule {
     async executeSOS() {
         document.getElementById('sos-confirm-overlay').classList.add('hidden');
         
-        const loc = window.MapController ? window.MapController.getCurrentLocation() : null;
+        let loc = window.MapController ? window.MapController.getCurrentLocation() : null;
         if (!loc) {
-            window.app.showTopBanner('Failed to get location. Gathering data...', 'danger');
-            // Try again implicitly or rely on backend to process IP block 
-            // Mock retry
-            setTimeout(() => this.executeSOS(), 2000);
-            return;
+            if (!this.sosRetryCount) this.sosRetryCount = 0;
+            this.sosRetryCount++;
+            
+            if (this.sosRetryCount < 3) {
+                window.app.showTopBanner('Acquiring location signals. Retrying...', 'warning', 2000);
+                setTimeout(() => this.executeSOS(), 2000);
+                return;
+            }
+            
+            // Fallback location - check local storage first, then rawCoords, then prompt manual pinpoint
+            let lastLat = 0;
+            let lastLng = 0;
+            let accuracy = 99999;
+            
+            const cachedCoordsStr = localStorage.getItem('last_known_coords');
+            if (cachedCoordsStr) {
+                try {
+                    const cached = JSON.parse(cachedCoordsStr);
+                    if (cached && cached.latitude && cached.longitude) {
+                        lastLat = cached.latitude;
+                        lastLng = cached.longitude;
+                        accuracy = cached.accuracy || 500;
+                    }
+                } catch(e) {
+                    console.error("Error parsing cached coordinates:", e);
+                }
+            }
+            
+            if (lastLat === 0 && lastLng === 0 && window.MapController && window.MapController.rawCoords) {
+                lastLat = window.MapController.rawCoords.latitude;
+                lastLng = window.MapController.rawCoords.longitude;
+                accuracy = window.MapController.rawCoords.accuracy || 99999;
+            }
+            
+            if (lastLat === 0 && lastLng === 0) {
+                this.sosRetryCount = 0;
+                window.app.showTopBanner('GPS signal lost. Please enable location services or select your coordinates manually.', 'danger', 8000);
+                const pinpoint = confirm("GPS signal not detected. Would you like to switch to the map to manually select your coordinates?");
+                if (pinpoint) {
+                    window.app.navigate('map');
+                }
+                return;
+            }
+            
+            loc = {
+                latitude: lastLat,
+                longitude: lastLng,
+                accuracy: accuracy,
+                isFallback: true
+            };
+            this.sosRetryCount = 0;
+            window.app.showTopBanner('SOS broadcasted using last known location (signals weak)', 'danger', 8000);
+        } else {
+            this.sosRetryCount = 0;
         }
 
         const user = window.Auth.getCurrentUser();
