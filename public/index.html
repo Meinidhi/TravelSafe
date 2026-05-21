@@ -42,11 +42,40 @@
         
         <!-- Map View -->
         <main id="view-map" class="view hidden">
+            <!-- Calibration Action Banner -->
+            <div id="calibration-banner" class="calibration-banner hidden">
+                <div class="calib-banner-text">
+                    <i class="fas fa-crosshairs text-accent" style="animation: pulse 1s infinite;"></i>
+                    <span><b>Calibration Mode:</b> Drag pin to actual location, then lock.</span>
+                </div>
+                <div class="calib-banner-actions">
+                    <button id="btn-calibration-lock" class="btn-calib-pills lock"><i class="fas fa-check"></i> Lock</button>
+                    <button id="btn-calibration-cancel" class="btn-calib-pills cancel"><i class="fas fa-times"></i> Cancel</button>
+                </div>
+            </div>
+
             <div id="map-container" class="map-container"></div>
+            
             <!-- Map overlay controls -->
             <div class="map-controls">
+                <button id="btn-location-health" class="icon-btn health-btn" title="Location Diagnostics">
+                    <i class="fas fa-satellite-dish"></i>
+                    <span id="health-dot" class="health-dot status-unknown"></span>
+                </button>
                 <button id="btn-recenter" class="icon-btn"><i class="fas fa-location-arrow"></i></button>
                 <div class="map-status" id="map-status-indicator">Loading GPS...</div>
+            </div>
+
+            <!-- Location Health Drawer (Sliding Mobile Sheet) -->
+            <div id="location-health-drawer" class="location-drawer hidden">
+                <div class="drawer-handle" id="drawer-handle-bar"></div>
+                <div class="drawer-header">
+                    <h3><i class="fas fa-satellite-dish text-accent"></i> Location Status</h3>
+                    <button class="drawer-close-btn" id="btn-close-drawer">&times;</button>
+                </div>
+                <div class="drawer-content" id="drawer-dynamic-content">
+                    <!-- Dynamic details will be loaded here by MapModule -->
+                </div>
             </div>
         </main>
         
@@ -93,7 +122,7 @@
         </a>
         <a href="#" class="nav-item" data-target="chat">
             <i class="fas fa-comments"></i>
-            <span>Assistant</span>
+            <span>Chat</span>
         </a>
         <a href="#" class="nav-item" data-target="profile">
             <i class="fas fa-user"></i>

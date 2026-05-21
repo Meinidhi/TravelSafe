@@ -9,9 +9,15 @@ class AdminModule {
         this.content = document.getElementById('admin-content');
         
         if (this.btn) {
-            this.btn.classList.remove('hidden');
+            this.btn.classList.add('hidden');
             
             this.btn.addEventListener('click', async () => {
+                const user = window.Auth ? window.Auth.getCurrentUser() : null;
+                if (!user || user.role !== 'admin') {
+                    alert("Access Denied: You do not possess administrator rights to open this dashboard.");
+                    return;
+                }
+                
                 this.modal.classList.remove('hidden');
                 this.content.innerHTML = `
                     <div style="text-align: center; padding: 30px;">
@@ -33,7 +39,7 @@ class AdminModule {
         let incidents = [];
         
         try {
-            const usersSnapshot = await window.db.collection('users').get();
+            const usersSnapshot = await window.db.collection('users').limit(50).get();
             usersSnapshot.forEach(doc => {
                 users.push({ id: doc.id, ...doc.data() });
             });
@@ -42,7 +48,10 @@ class AdminModule {
         }
         
         try {
-            const incidentsSnapshot = await window.db.collection('incidents').get();
+            const incidentsSnapshot = await window.db.collection('incidents')
+                .orderBy('timestamp', 'desc')
+                .limit(50)
+                .get();
             incidentsSnapshot.forEach(doc => {
                 incidents.push({ id: doc.id, ...doc.data() });
             });

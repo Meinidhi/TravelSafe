@@ -33,11 +33,15 @@ class Authentication {
                 
                 this.initialized = true;
                 
-                // If we are app startup and we failed to get user, show auth
-                if (!this.currentUser && window.app && window.app.currentView !== 'auth') {
-                    this.render();
-                } else if (this.currentUser && window.app && window.app.currentView === 'auth') {
-                    this.setSession(this.currentUser);
+                if (window.app) {
+                    window.app.checkAuthStatus();
+                } else {
+                    // If we are app startup and we failed to get user, show auth
+                    if (!this.currentUser && window.app && window.app.currentView !== 'auth') {
+                        this.render();
+                    } else if (this.currentUser && window.app && window.app.currentView === 'auth') {
+                        this.setSession(this.currentUser);
+                    }
                 }
                 
                 resolve();
@@ -217,19 +221,31 @@ class Authentication {
     setSession(user) {
         this.currentUser = user;
         if (window.app) {
-            window.app.elements.nav.classList.remove('hidden');
-            window.app.navigate('dashboard');
+            window.app.checkAuthStatus();
         }
     }
     
     async logout() {
         try {
+            // 1. Shut down Geolocation watch loops, intervals, and wipe map layers
+            if (window.MapController && window.MapController.stopGPSTracking) {
+                window.MapController.stopGPSTracking();
+            }
+            
+            // 2. Unsubscribe from real-time database snapshot streams and reset group context
+            if (window.GroupController && window.GroupController.cleanup) {
+                window.GroupController.cleanup();
+            }
+
+            // 3. Unsubscribe from real-time group chat and clean up typing status
+            if (window.ChatController && window.ChatController.cleanup) {
+                window.ChatController.cleanup();
+            }
+
             await window.auth.signOut();
             this.currentUser = null;
             if (window.app) {
-                window.app.elements.nav.classList.add('hidden');
-                window.app.navigate('auth');
-                this.renderLogin();
+                window.app.checkAuthStatus();
             }
         } catch(e) {
             console.error("Logout failed", e);

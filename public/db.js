@@ -119,13 +119,15 @@ class DatabaseClient {
     
     async getIncidents() {
         try {
-            const snapshot = await window.db.collection('incidents').get();
+            const snapshot = await window.db.collection('incidents')
+                .orderBy('timestamp', 'desc')
+                .limit(50)
+                .get();
             const incidents = [];
             snapshot.forEach(doc => {
                 incidents.push(doc.data());
             });
-            // Sort by timestamp descending
-            return incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            return incidents;
         } catch(e) {
             console.error("Error getting incidents:", e);
             return [];
@@ -202,11 +204,11 @@ class DatabaseClient {
     }
 
     // --- Real-time Location ---
-    async updateLocation(userId, lat, lng) {
+    async updateLocation(userId, lat, lng, accuracy = null, isCalibrated = false) {
         if (!userId) return;
         try {
             await window.db.collection('users').doc(userId).set({
-                location: { lat, lng, timestamp: new Date().toISOString() }
+                location: { lat, lng, accuracy, isCalibrated, timestamp: new Date().toISOString() }
             }, { merge: true });
         } catch(e) {
             console.error("Error updating location:", e);
@@ -247,6 +249,83 @@ class DatabaseClient {
                 callback(membersData);
             }, error => {
                 console.error("Error listening to group members:", error);
+            });
+    }
+
+    async sendGroupMessage(groupId, senderId, senderName, text) {
+        if (!groupId) return;
+        try {
+            await window.db.collection('groups').doc(groupId).collection('messages').add({
+                senderId,
+                senderName,
+                text,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } catch(e) {
+            console.error("Error sending group message:", e);
+            throw e;
+        }
+    }
+
+    listenToGroupMessages(groupId, callback) {
+        if (!groupId) return () => {};
+        return window.db.collection('groups').doc(groupId).collection('messages')
+            .orderBy('timestamp', 'asc')
+            .onSnapshot((snapshot) => {
+                const messages = [];
+                snapshot.forEach(doc => {
+                    messages.push({ id: doc.id, ...doc.data() });
+                });
+                callback(messages);
+            }, error => {
+                console.error("Error listening to group messages:", error);
+            });
+    }
+
+    async setUserTypingStatus(groupId, userId, userName, isTyping) {
+        if (!groupId || !userId) return;
+        try {
+            const typingRef = window.db.collection('groups').doc(groupId).collection('typing').doc(userId);
+            if (isTyping) {
+                await typingRef.set({
+                    name: userName,
+                    isTyping: true,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                await typingRef.delete();
+            }
+        } catch(e) {
+            console.error("Error setting typing status:", e);
+        }
+    }
+
+    listenToTypingStatus(groupId, callback) {
+        if (!groupId) return () => {};
+        return window.db.collection('groups').doc(groupId).collection('typing')
+            .onSnapshot((snapshot) => {
+                const typingUsers = [];
+                const currentUserId = (window.Auth && window.Auth.getCurrentUser()) ? window.Auth.getCurrentUser().id : '';
+                const nowMs = Date.now();
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data && data.isTyping && doc.id !== currentUserId) {
+                        // Check if typing indicator has expired (older than 10 seconds)
+                        let isFresh = true;
+                        if (data.timestamp) {
+                            const tsMs = (data.timestamp.toMillis ? data.timestamp.toMillis() : new Date(data.timestamp).getTime());
+                            if (nowMs - tsMs > 10000) {
+                                isFresh = false;
+                            }
+                        }
+                        if (isFresh) {
+                            typingUsers.push({ id: doc.id, name: data.name });
+                        }
+                    }
+                });
+                callback(typingUsers);
+            }, error => {
+                console.error("Error listening to typing status:", error);
             });
     }
 }

@@ -62,17 +62,34 @@ class App {
 
     checkAuthStatus() {
         // If DB script is loaded, check if logged in
+        const adminBtn = document.getElementById('dev-admin-btn');
         if (window.Auth && Auth.getCurrentUser()) {
             this.elements.nav.classList.remove('hidden');
             this.navigate('dashboard');
+            
+            // Administrative role validation
+            const user = Auth.getCurrentUser();
+            if (adminBtn) {
+                if (user && user.role === 'admin') {
+                    adminBtn.classList.remove('hidden');
+                } else {
+                    adminBtn.classList.add('hidden');
+                }
+            }
         } else {
             this.elements.nav.classList.add('hidden');
             this.navigate('auth');
             if (window.Auth) window.Auth.render();
+            if (adminBtn) adminBtn.classList.add('hidden');
         }
     }
 
     navigate(viewId) {
+        // Cleanup chat listeners and typing states if navigating away from chat
+        if (this.currentView === 'chat' && window.ChatController && window.ChatController.cleanup) {
+            window.ChatController.cleanup();
+        }
+
         // Hide all views
         this.elements.views.forEach(view => {
             view.classList.remove('active');

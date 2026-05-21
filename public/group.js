@@ -136,7 +136,7 @@ class GroupModule {
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--bg-tertiary);">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div style="background: var(--accent-color); color: var(--bg-primary); width: 32px; height: 32px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold;">
-                                ${escapedName[0].toUpperCase()}
+                                ${(escapedName && escapedName.length > 0 ? escapedName[0] : 'U').toUpperCase()}
                             </div>
                             <span style="${isMe ? 'font-weight:bold' : ''}">${escapedName}</span>
                         </div>
@@ -218,6 +218,22 @@ class GroupModule {
             // In a real app this issues a push notification to members
             console.log(`SOS Alert sent to Group ${this.activeGroup.id}`);
         }
+    }
+
+    cleanup() {
+        console.log("Cleaning up Group Module snapshot listeners and cached state...");
+        
+        // 1. Unsubscribe from real-time database listener
+        if (this.unsubscribeMembers) {
+            this.unsubscribeMembers();
+            this.unsubscribeMembers = null;
+        }
+
+        // 2. Clear markers and details
+        this.activeGroup = null;
+        this.groupMarkers = {};
+        this.knownSOSStates = {};
+        this.groupMembersData = [];
     }
 }
 
