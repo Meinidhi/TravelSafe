@@ -52,7 +52,11 @@ class DatabaseClient {
         for (let task of queue) {
             try {
                 if (task.operation === 'saveIncident') {
-                    await window.db.collection('incidents').doc(task.data.id).set(task.data);
+                    const docRef = window.db.collection('incidents').doc(task.data.id);
+                    const docSnap = await docRef.get();
+                    if (!docSnap.exists) {
+                        await docRef.set(task.data);
+                    }
                 }
             } catch(e) {
                 console.error("Failed to sync task", task, e);

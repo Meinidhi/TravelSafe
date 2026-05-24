@@ -656,3 +656,31 @@ input:focus, select:focus, textarea:focus {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Optimize layout in mobile landscape mode (height under 480px) */
+@media (max-height: 480px) {
+    header {
+        padding: 6px 15px !important;
+        margin-bottom: 5px !important;
+    }
+    header h1 {
+        font-size: 1.1rem !important;
+    }
+    .bottom-nav {
+        height: 50px !important;
+        padding: 4px 0 !important;
+    }
+    .bottom-nav a {
+        font-size: 0.7rem !important;
+        gap: 2px !important;
+    }
+    .bottom-nav i {
+        font-size: 1rem !important;
+    }
+    .view {
+        padding-bottom: 60px !important;
+    }
+    #chat-window {
+        height: 45vh !important;
+    }
+}
+

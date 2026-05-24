@@ -191,6 +191,8 @@ class SOSModule {
                 window.app.showTopBanner('SOS Sent Successfully to emergency contacts & group!', 'danger', 10000);
             }
 
+
+
             // Broadcast SOS status to group members via Firebase
             if (user) {
                 user.isSOSActive = true;
