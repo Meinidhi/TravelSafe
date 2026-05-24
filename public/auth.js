@@ -90,6 +90,34 @@ class Authentication {
         });
     }
 
+    async handleLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        const errorEl = document.getElementById('login-error');
+        const submitBtn = document.getElementById('login-submit');
+
+        errorEl.classList.add('hidden');
+
+        if (!email || !password) {
+            errorEl.textContent = "Please fill in all fields.";
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Logging in...';
+
+        try {
+            await window.auth.signInWithEmailAndPassword(email, password);
+        } catch(err) {
+            errorEl.textContent = err.message || "Invalid email or password.";
+            errorEl.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Login';
+        }
+    }
+
     renderRegister() {
         this.viewElement.innerHTML = `
             <div class="auth-box">
@@ -137,34 +165,7 @@ class Authentication {
         });
     }
 
-    async handleLogin(e) {
-        e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
-        const password = document.getElementById('login-password').value;
-        const errorEl = document.getElementById('login-error');
-        const submitBtn = document.getElementById('login-submit');
 
-        errorEl.classList.add('hidden');
-
-        if (!email || !password) {
-            errorEl.textContent = "Please fill in all fields.";
-            errorEl.classList.remove('hidden');
-            return;
-        }
-
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Logging in...';
-
-        try {
-            await window.auth.signInWithEmailAndPassword(email, password);
-            // onAuthStateChanged will handle the rest
-        } catch(err) {
-            errorEl.textContent = err.message || "Invalid email or password.";
-            errorEl.classList.remove('hidden');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Login';
-        }
-    }
 
     async handleRegister(e) {
         e.preventDefault();

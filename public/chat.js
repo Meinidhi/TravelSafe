@@ -11,6 +11,7 @@ class GroupChatModule {
         this.unsubscribeTyping = null;
         this.typingTimeout = null;
         this.isTypingState = false;
+        this.lastMessageTime = 0; // Rate throttling tracker
 
         // Auto-cleanup typing state when browser tab closes or unloads
         window.addEventListener('beforeunload', () => this.stopTyping());
@@ -120,9 +121,16 @@ class GroupChatModule {
         
         if (sendBtn && inputEl) {
             const sendMessage = async () => {
+                const now = Date.now();
+                if (now - this.lastMessageTime < 800) {
+                    window.app.showTopBanner('Spam prevention: sending too fast!', 'warning', 2000);
+                    return;
+                }
+
                 const text = inputEl.value.trim();
                 if (!text) return;
                 
+                this.lastMessageTime = now;
                 sendBtn.disabled = true;
                 inputEl.value = '';
                 
